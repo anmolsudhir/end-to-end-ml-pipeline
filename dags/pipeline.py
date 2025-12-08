@@ -22,6 +22,24 @@ default_args = {
     "catchup": False,
 }
 
+# Feast Environment Config
+feast_env = {
+    "AWS_ACCESS_KEY_ID": "minio",
+    "AWS_SECRET_ACCESS_KEY": "minioadmin",
+    "FEAST_S3_ENDPOINT_URL": "http://minio:9000",
+    "FEAST_USAGE": "False",
+}
+
+# Mount Config for Task Containers
+mounts_config = [
+    # 1. CODE: Syncs local 'src' folder to the container
+    Mount(source=f"{HOST_PROJECT_PATH}/src", target="/app/src", type="bind"),
+    # 2. FEAST CONFIG: Syncs local 'features' folder
+    Mount(source=f"{HOST_PROJECT_PATH}/features", target="/app/features", type="bind"),
+    # 3. PERSISTENCE: Sync local 'data' folder
+    Mount(source=f"{HOST_PROJECT_PATH}/data", target="/app/data", type="bind"),
+]
+
 with DAG("01_etl", default_args=default_args, schedule_interval="@once") as dag:
 
     # TASK 1: INGEST (Bronze)
@@ -38,10 +56,7 @@ with DAG("01_etl", default_args=default_args, schedule_interval="@once") as dag:
         docker_url="unix://var/run/docker.sock",
         force_pull=False,
         mount_tmp_dir=False,
-        mounts=[
-            Mount(source=f"{HOST_PROJECT_PATH}/src", target="/app/src", type="bind"),
-            Mount(source=f"{HOST_PROJECT_PATH}/data", target="/data", type="bind"),
-        ],
+        mounts=mounts_config,
     )
 
     # TASK 2: CLEAN (Silver)
@@ -55,10 +70,7 @@ with DAG("01_etl", default_args=default_args, schedule_interval="@once") as dag:
         docker_url="unix://var/run/docker.sock",
         force_pull=False,
         mount_tmp_dir=False,
-        mounts=[
-            Mount(source=f"{HOST_PROJECT_PATH}/src", target="/app/src", type="bind"),
-            Mount(source=f"{HOST_PROJECT_PATH}/data", target="/data", type="bind"),
-        ],
+        mounts=mounts_config,
     )
 
     # TASK 3: FEATURE ENGINEERING (Gold)
@@ -75,10 +87,7 @@ with DAG("01_etl", default_args=default_args, schedule_interval="@once") as dag:
         docker_url="unix://var/run/docker.sock",
         force_pull=False,
         mount_tmp_dir=False,
-        mounts=[
-            Mount(source=f"{HOST_PROJECT_PATH}/src", target="/app/src", type="bind"),
-            Mount(source=f"{HOST_PROJECT_PATH}/data", target="/data", type="bind"),
-        ],
+        mounts=mounts_config,
     )
 
     # TASK 4: DATA VALIDATION
@@ -95,11 +104,47 @@ with DAG("01_etl", default_args=default_args, schedule_interval="@once") as dag:
         docker_url="unix://var/run/docker.sock",
         force_pull=False,
         mount_tmp_dir=False,
-        mounts=[
-            Mount(source=f"{HOST_PROJECT_PATH}/src", target="/app/src", type="bind"),
-            Mount(source=f"{HOST_PROJECT_PATH}/data", target="/data", type="bind"),
-        ],
+        mounts=mounts_config,
+    )
+
+    # Task 5: Feast Apply (Register Features)
+    feast_apply = DockerOperator(
+        task_id="feast_apply",
+        image="dag-spark:v1",
+        api_version="auto",
+        auto_remove=True,
+        # Assumes local 'features' folder is mounted to /app/features
+        command="bash -c 'cd /app/features && feast apply'",
+        network_mode=DOCKER_NETWORK,
+        docker_url="unix://var/run/docker.sock",
+        environment=feast_env,
+        force_pull=False,
+        mount_tmp_dir=False,
+        mounts=mounts_config,
+    )
+
+    # Task 6: Feast Materialize (Load Redis)
+    # Loads data from 2020 up to NOW
+    feast_materialize = DockerOperator(
+        task_id="feast_materialize",
+        image="dag-spark:v1",
+        api_version="auto",
+        auto_remove=True,
+        command="bash -c 'cd /app/features && feast materialize-incremental $(date -u +%Y-%m-%dT%H:%M:%S)'",
+        network_mode=DOCKER_NETWORK,
+        docker_url="unix://var/run/docker.sock",
+        environment=feast_env,
+        force_pull=False,
+        mount_tmp_dir=False,
+        mounts=mounts_config,
     )
 
     # DEPENDENCY: Run Ingest, THEN Clean
-    ingest_task >> clean_task >> feature_eng_task >> data_validation_task
+    (
+        ingest_task
+        >> clean_task
+        >> feature_eng_task
+        >> data_validation_task
+        >> feast_apply
+        >> feast_materialize
+    )

@@ -39,3 +39,5 @@ standalone_admin_password.txt
 
 # --- 6. Jupyter Notebook Checkpoints ---
 .ipynb_checkpoints/
+
+redis_data/

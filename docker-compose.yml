@@ -165,6 +165,24 @@ services:
     command: scheduler
 
   # ------------------------------------------------------------------
+  #  REDIS FOR ONLINE STORE
+  # ------------------------------------------------------------------
+  redis:
+    image: redis:7.0
+    container_name: redis
+    ports:
+      - "6379:6379"
+    networks:
+      - pipeline-network
+    volumes:
+      - ./redis_data:/data # Persist data so it survives restarts
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ------------------------------------------------------------------
   # JUPYTER LAB
   # ------------------------------------------------------------------
   jupyter:

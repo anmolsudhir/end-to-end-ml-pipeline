@@ -1,7 +1,7 @@
 from pyspark.sql import SparkSession
 from pyspark.ml.feature import StringIndexer, OneHotEncoder, Bucketizer
 from pyspark.ml import Pipeline
-from puyspark.ml.functions import vector_to_array
+from pyspark.ml.functions import vector_to_array
 from pyspark.sql.functions import current_timestamp, col, when, lit
 import sys
 

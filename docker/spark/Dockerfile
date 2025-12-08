@@ -19,8 +19,14 @@ ENV JAVA_HOME=/usr/lib/jvm/java-17-openjdk
 RUN pip install --no-cache-dir \
   pyspark==3.5.0 \
   delta-spark==3.0.0 \
-  pandas \
-  openpyxl
+  pandas==1.5.3 \
+  openpyxl \
+  feast==0.36.0 \
+  redis \
+  boto3 \
+  s3fs \
+  pyarrow \
+  "dask[dataframe]==2023.12.0"
 
 # 4. Set Working Directory
 WORKDIR /usr/local/lib/python3.9/site-packages/pyspark/jars
