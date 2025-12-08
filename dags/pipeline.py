@@ -81,5 +81,25 @@ with DAG("01_etl", default_args=default_args, schedule_interval="@once") as dag:
         ],
     )
 
+    # TASK 4: DATA VALIDATION
+    data_validation_task = DockerOperator(
+        task_id="validation_gold_layer",
+        image="dag-spark:v1",
+        api_version="auto",
+        auto_remove=True,  # Clean up container after run
+        # COMMAND: Run the script inside the container
+        command="python3 /app/src/validate_gold_layer.py",
+        # NETWORK: Critical for talking to MinIO
+        network_mode=DOCKER_NETWORK,
+        # PERMISSIONS: Allow Docker-in-Docker
+        docker_url="unix://var/run/docker.sock",
+        force_pull=False,
+        mount_tmp_dir=False,
+        mounts=[
+            Mount(source=f"{HOST_PROJECT_PATH}/src", target="/app/src", type="bind"),
+            Mount(source=f"{HOST_PROJECT_PATH}/data", target="/data", type="bind"),
+        ],
+    )
+
     # DEPENDENCY: Run Ingest, THEN Clean
-    ingest_task >> clean_task >> feature_eng_task
+    ingest_task >> clean_task >> feature_eng_task >> data_validation_task

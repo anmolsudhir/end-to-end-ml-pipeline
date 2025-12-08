@@ -1,6 +1,7 @@
 from pyspark.sql import SparkSession
 from pyspark.ml.feature import StringIndexer, OneHotEncoder, Bucketizer
 from pyspark.ml import Pipeline
+from puyspark.ml.functions import vector_to_array
 from pyspark.sql.functions import current_timestamp, col, when, lit
 import sys
 
@@ -117,6 +118,13 @@ def run_feature_engineering():
 
     # Drop intermediate columns to keep the Feature Store clean
     # We remove the raw strings and temporary indexes, keeping only the final Vectors + Raw Numerics
+    # 1. Convert Spark Vectors to Standard Arrays (Crucial for Feast/Pandas)
+    vec_cols = [c for c in df_transformed.columns if c.endswith("_vec")]
+    for c in vec_cols:
+        # distinct=True converts to a dense array (e.g. [0.0, 1.0, 0.0])
+        df_transformed = df_transformed.withColumn(c, vector_to_array(col(c)))
+
+    # 2. Drop raw categorical columns and index columns
     cols_to_drop = categorical_cols + [f"{c}_idx" for c in categorical_cols]
     df_final = df_transformed.drop(*cols_to_drop)
 
