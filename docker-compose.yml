@@ -45,9 +45,9 @@ services:
         # Checks if file exists in the mounted volume and pushes to S3
         if [ -f /data/dataset/Telco-Customer-Churn.xlsx ]; then
           echo '--- Found raw file. Uploading to MinIO raw bucket... ---';
-          /usr/bin/mc cp /data/dataset/Telco-Customer-Churn.xlsx minio/raw/telco_churn.csv;
+          /usr/bin/mc cp /data/dataset/Telco-Customer-Churn.xlsx minio/raw/telco_churn.xlsx;
         else
-          echo '--- WARNING: telco_churn.csv not found in data/raw. Skipping upload. ---';
+          echo '--- WARNING: Telco-Customer-Churn.xlsx not found in data/dataset. Skipping upload. ---';
         fi;
         
         echo '--- MinIO Setup Complete ---';

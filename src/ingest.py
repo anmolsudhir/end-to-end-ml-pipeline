@@ -6,8 +6,11 @@ def run_ingestion():
     # --- 1. SPARK SESSION CONFIGURATION ---
     print("--- Configuring Spark with Delta & MinIO Support ---")
 
+    packages = ["com.crealytics:spark-excel_2.12:3.5.0_0.20.3"]
+
     builder = (
         SparkSession.builder.appName("BronzeIngestion")
+        .config("spark.jars.packages", ",".join(packages))
         .config("spark.sql.extensions", "io.delta.sql.DeltaSparkSessionExtension")
         .config(
             "spark.sql.catalog.spark_catalog",
@@ -29,7 +32,7 @@ def run_ingestion():
 
     # --- 2. DEFINE PATHS ---
     # Input: The raw CSV sitting in MinIO
-    raw_path = "s3a://raw/telco_churn.csv"
+    raw_path = "s3a://raw/telco_churn.xlsx"
 
     # Output: The Bronze bucket (Delta Format)
     bronze_path = "s3a://bronze/telco_churn_delta"
@@ -39,8 +42,10 @@ def run_ingestion():
     try:
         # We allow Spark to infer schema for Bronze, but assume header exists
         df = (
-            spark.read.option("header", "true")
+            spark.read.format("com.crealytics.spark.excel")
+            .option("header", "true")
             .option("inferSchema", "true")
+            .option("treatEmptyValuesAsNulls", "true")
             .csv(raw_path)
         )
 
