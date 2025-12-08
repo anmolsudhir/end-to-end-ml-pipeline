@@ -22,10 +22,9 @@ default_args = {
     "catchup": False,
 }
 
-with DAG(
-    "01_bronze_ingestion", default_args=default_args, schedule_interval="@once"
-) as dag:
+with DAG("01_etl", default_args=default_args, schedule_interval="@once") as dag:
 
+    # TASK 1: INGEST (Bronze)
     ingest_task = DockerOperator(
         task_id="ingest_bronze_layer",
         image="dag-spark:v1",
@@ -44,3 +43,43 @@ with DAG(
             Mount(source=f"{HOST_PROJECT_PATH}/data", target="/data", type="bind"),
         ],
     )
+
+    # TASK 2: CLEAN (Silver)
+    clean_task = DockerOperator(
+        task_id="clean_silver",
+        image="dag-spark:v1",  # Reuse the same image
+        api_version="auto",
+        auto_remove=True,
+        command="python3 /app/src/clean.py",  # <--- Run the clean script
+        network_mode=DOCKER_NETWORK,
+        docker_url="unix://var/run/docker.sock",
+        force_pull=False,
+        mount_tmp_dir=False,
+        mounts=[
+            Mount(source=f"{HOST_PROJECT_PATH}/src", target="/app/src", type="bind"),
+            Mount(source=f"{HOST_PROJECT_PATH}/data", target="/data", type="bind"),
+        ],
+    )
+
+    # TASK 3: FEATURE ENGINEERING (Gold)
+    feature_eng_task = DockerOperator(
+        task_id="feature_eng_bronze_layer",
+        image="dag-spark:v1",
+        api_version="auto",
+        auto_remove=True,  # Clean up container after run
+        # COMMAND: Run the script inside the container
+        command="python3 /app/src/feature_eng.py",
+        # NETWORK: Critical for talking to MinIO
+        network_mode=DOCKER_NETWORK,
+        # PERMISSIONS: Allow Docker-in-Docker
+        docker_url="unix://var/run/docker.sock",
+        force_pull=False,
+        mount_tmp_dir=False,
+        mounts=[
+            Mount(source=f"{HOST_PROJECT_PATH}/src", target="/app/src", type="bind"),
+            Mount(source=f"{HOST_PROJECT_PATH}/data", target="/data", type="bind"),
+        ],
+    )
+
+    # DEPENDENCY: Run Ingest, THEN Clean
+    ingest_task >> clean_task >> feature_eng_task

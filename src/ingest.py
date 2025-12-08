@@ -6,11 +6,8 @@ def run_ingestion():
     # --- 1. SPARK SESSION CONFIGURATION ---
     print("--- Configuring Spark with Delta & MinIO Support ---")
 
-    packages = ["com.crealytics:spark-excel_2.12:3.5.0_0.20.3"]
-
     builder = (
         SparkSession.builder.appName("BronzeIngestion")
-        .config("spark.jars.packages", ",".join(packages))
         .config("spark.sql.extensions", "io.delta.sql.DeltaSparkSessionExtension")
         .config(
             "spark.sql.catalog.spark_catalog",
