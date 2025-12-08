@@ -1,0 +1,196 @@
+services:
+  # ------------------------------------------------------------------
+  # MinIO - S3 Compatible Object Store for Data Lake
+  # ------------------------------------------------------------------
+  minio:
+    image: minio/minio
+    container_name: minio
+    ports:
+      - "9000:9000" # API Port
+      - "9001:9001" # Console UI
+    environment:
+      - MINIO_ROOT_USER=minio
+      - MINIO_ROOT_PASSWORD=minioadmin
+    command: server /data --console-address ":9001"
+    networks:
+      - pipeline-network
+    volumes:
+      - minio_data:/data
+
+  # ------------------------------------------------------------------
+  # Create Buckets & Upload Raw Data
+  # ------------------------------------------------------------------
+  minio-create-buckets:
+    image: minio/mc
+    container_name: minio_setup
+    depends_on:
+      - minio
+    networks:
+      - pipeline-network
+    volumes:
+      - ./data:/data
+    entrypoint: >
+      /bin/sh -c "
+        # 1. Connect to MinIO (Wait for it to start)
+        until (/usr/bin/mc alias set minio http://minio:9000 minio minioadmin); do echo '...waiting for minio...'; sleep 1; done;
+        
+        # 2. Create the Medallion Architecture Buckets
+        echo '--- Creating Buckets ---';
+        /usr/bin/mc mb --ignore-existing minio/raw;
+        /usr/bin/mc mb --ignore-existing minio/bronze;
+        /usr/bin/mc mb --ignore-existing minio/silver;
+        /usr/bin/mc mb --ignore-existing minio/gold;
+        
+        # 3. Auto-Upload the Raw Data
+        # Checks if file exists in the mounted volume and pushes to S3
+        if [ -f /data/dataset/Telco-Customer-Churn.xlsx ]; then
+          echo '--- Found raw file. Uploading to MinIO raw bucket... ---';
+          /usr/bin/mc cp /data/dataset/Telco-Customer-Churn.xlsx minio/raw/telco_churn.csv;
+        else
+          echo '--- WARNING: telco_churn.csv not found in data/raw. Skipping upload. ---';
+        fi;
+        
+        echo '--- MinIO Setup Complete ---';
+        exit 0;
+      "
+  # ------------------------------------------------------------------
+  # METADATA DB For AIRFLOW (Postgres)
+  # ------------------------------------------------------------------
+  postgres:
+    image: postgres:13
+    container_name: postgres
+    networks:
+      - pipeline-network
+    environment:
+      - POSTGRES_USER=airflow
+      - POSTGRES_PASSWORD=airflow
+      - POSTGRES_DB=airflow
+    volumes:
+      - postgres-db-volume:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "airflow"]
+      interval: 5s
+      retries: 5
+
+  # ------------------------------------------------------------------
+  # Runs once to setup DB and User
+  # ------------------------------------------------------------------
+  airflow-init:
+    image: apache/airflow:2.7.1
+    container_name: airflow_init
+    networks:
+      - pipeline-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres/airflow
+      - AIRFLOW__CORE__LOAD_EXAMPLES=false
+    # This script initializes the DB and creates the user IF it doesn't exist
+    entrypoint: /bin/bash
+    # 2. THE SCRIPT: Pass the script as arguments to bash
+    command:
+      - -c
+      - |
+        echo "--- Initializing Airflow Database ---"
+        airflow db migrate
+
+        echo "--- Creating Admin User ---"
+        airflow users create \
+            --username admin \
+            --firstname Admin \
+            --lastname User \
+            --role Admin \
+            --email admin@example.com \
+            --password admin \
+            || echo "User already exists, skipping creation."
+
+        echo "--- Init Complete ---"
+
+  # ------------------------------------------------------------------
+  # AIRFLOW WEBSERVER
+  # ------------------------------------------------------------------
+  airflow-webserver:
+    image: apache/airflow:2.7.1
+    container_name: airflow_webserver
+    networks:
+      - pipeline-network
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres/airflow
+      - AIRFLOW__CORE__LOAD_EXAMPLES=false
+      # DYNAMIC PATH for Docker-in-Docker
+      - HOST_PROJECT_PATH=${PWD}
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./logs:/opt/airflow/logs
+      - ./data:/opt/airflow/data
+      - /var/run/docker.sock:/var/run/docker.sock
+    ports:
+      - "8080:8080"
+    command: webserver
+
+  # ------------------------------------------------------------------
+  # AIRFLOW SCHEDULER
+  # ------------------------------------------------------------------
+  airflow-scheduler:
+    image: apache/airflow:2.7.1
+    container_name: airflow_scheduler
+    networks:
+      - pipeline-network
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres/airflow
+      - AIRFLOW__CORE__LOAD_EXAMPLES=false
+      # DYNAMIC PATH for Docker-in-Docker
+      - HOST_PROJECT_PATH=${PWD}
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./logs:/opt/airflow/logs
+      - ./data:/opt/airflow/data
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: scheduler
+
+  # ------------------------------------------------------------------
+  # JUPYTER LAB
+  # ------------------------------------------------------------------
+  jupyter:
+    image: jupyter/pyspark-notebook:latest
+    container_name: jupyter
+    networks:
+      - pipeline-network
+    ports:
+      - "8888:8888"
+    environment:
+      - JUPYTER_TOKEN=admin
+    volumes:
+      - ./notebooks:/home/jovyan/work/notebooks
+      - ./src:/home/jovyan/work/src
+      - ./data:/home/jovyan/work/data
+
+# ------------------------------------------------------------------
+# NETWORK DEFINITION
+# ------------------------------------------------------------------
+networks:
+  pipeline-network:
+    driver: bridge
+
+# ------------------------------------------------------------------
+# VOLUME MOUNT DEFINITION
+# ------------------------------------------------------------------
+volumes:
+  minio_data:
+  postgres-db-volume:

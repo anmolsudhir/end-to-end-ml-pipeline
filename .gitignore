@@ -1,0 +1,41 @@
+# --- 1. Python & Environment ---
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+.env
+
+# --- 2. OS & IDE Junk ---
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+
+# --- 3. Data (CRITICAL) ---
+data/bronze/*
+data/silver/*
+data/gold/*
+# Exception: Keep the .gitkeep files so folders exist for Docker
+!data/raw/.gitkeep
+!data/bronze/.gitkeep
+!data/silver/.gitkeep
+!data/gold/.gitkeep
+
+# --- 4. Spark & Java Metadata ---
+# These are created when running Spark locally
+metastore_db/
+derby.log
+spark-warehouse/
+
+# --- 5. Airflow Local Files ---
+# Since we use Docker, these shouldn't appear, but just in case
+airflow.db
+airflow-webserver.pid
+logs/
+standalone_admin_password.txt
+
+# --- 6. Jupyter Notebook Checkpoints ---
+.ipynb_checkpoints/
