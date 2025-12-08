@@ -46,7 +46,8 @@ def run_ingestion():
             .option("header", "true")
             .option("inferSchema", "true")
             .option("treatEmptyValuesAsNulls", "true")
-            .csv(raw_path)
+            .option("addColorColumns", "false")
+            .load(raw_path)
         )
 
         row_count = df.count()
