@@ -1,6 +1,6 @@
 # Telco Customer Churn Pipeline: End-to-End MLOps
 
-An enterprise-grade MLOps pipeline designed to predict customer churn. This project demonstrates a full **Medallion Architecture**, **Feature Store implementation**, **Data Validation**, and **Model Training**, orchestrated entirely via **Apache Airflow** and **Docker**.
+An enterprise-grade MLOps pipeline designed to predict customer churn. This project demonstrates a full **Medallion Architecture**, **Feature Store implementation**, **Data Validation**, and **Model Training**(WIP), orchestrated entirely via **Apache Airflow** and **Docker**.
 
 ---
 
@@ -63,7 +63,7 @@ docker compose up -d
 
 ### 4\. Run the Pipeline
 
-1. Navigate to Airflow: `http://localhost:8080` (User/Pass: `airflow`/`airflow`).
+1. Navigate to Airflow: `http://localhost:8080` (User/Pass: `admin`/`admin`).
 2. Enable the `01_etl` DAG.
 3. Trigger the DAG manually.
 
@@ -72,10 +72,6 @@ docker compose up -d
 - **Airflow:** All tasks (Ingest -\> Clean -\> Engineer -\> Validate -\> Feast -\> Train) should be Dark Green.
 - **Model:** Check the logs of the `train_model` task to see the Accuracy score.
 - **Feature Store:** Run the exploration script to see data fetched from Redis:
-
-  ```bash
-  docker exec -it telco_spark_1 python3 /app/src/explore_feature_store.py
-  ```
 
 ---
 
