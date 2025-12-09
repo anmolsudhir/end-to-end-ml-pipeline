@@ -15,6 +15,7 @@ gold_source = FileSource(
     s3_endpoint_override="http://minio:9000",
     event_timestamp_column="event_timestamp",
     created_timestamp_column="created_timestamp",
+    timestamp_field="event_timestamp",
 )
 
 # 3. Define Feature View (THE COMPLETE LIST)

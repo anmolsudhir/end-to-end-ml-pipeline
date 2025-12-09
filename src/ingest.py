@@ -39,7 +39,7 @@ def run_ingestion():
     try:
         # We allow Spark to infer schema for Bronze, but assume header exists
         df = (
-            spark.read.format("com.crealytics.spark.excel")
+            spark.read.format("excel")
             .option("header", "true")
             .option("inferSchema", "true")
             .option("treatEmptyValuesAsNulls", "true")

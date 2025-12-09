@@ -3,6 +3,7 @@ from pyspark.ml.feature import StringIndexer, OneHotEncoder, Bucketizer
 from pyspark.ml import Pipeline
 from pyspark.ml.functions import vector_to_array
 from pyspark.sql.functions import current_timestamp, col, when, lit
+from delta import configure_spark_with_delta_pip
 import sys
 
 
@@ -25,7 +26,7 @@ def run_feature_engineering():
         .config("spark.hadoop.fs.s3a.connection.ssl.enabled", "false")
     )
 
-    spark = builder.getOrCreate()
+    spark = configure_spark_with_delta_pip(builder).getOrCreate()
     spark.sparkContext.setLogLevel("ERROR")
 
     # 2. Read Silver Data (Delta Format)

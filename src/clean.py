@@ -77,13 +77,20 @@ def run_cleaning():
             df = df.withColumn(c, col(c).cast(IntegerType()))
 
     # 5. Fix Total Charges (The Critical Fix)
-    if "total_charges" in df.columns:
-        print("--- Cleaning Total Charges (Filling Nulls with 0.0) ---")
-        # 1. Cast to Double (It should already be double from Bronze, but this enforces it)
-        # 2. Fill NA with 0.0
-        df = df.withColumn(
-            "total_charges", col("total_charges").cast(DoubleType())
-        ).fillna(0.0, subset=["total_charges"])
+    # Using temp column to trim spaces before casting
+    df = df.withColumn("tc_trimmed", trim(col("total_charges")))
+
+    df = df.withColumn(
+        "total_charges",
+        when(col("tc_trimmed") == "", None).otherwise(
+            col("tc_trimmed").cast(DoubleType())
+        ),  # The fix for ' ' error
+    ).fillna(
+        0.0, subset=["total_charges"]
+    )  # Fill NULLs with 0.0
+
+    # Drop the temp column
+    df = df.drop("tc_trimmed")
 
     # 6. FIX: Handling Unusual Casing for customer_i_d and streaming_t_v
     df = df.withColumnRenamed("customer_i_d", "customer_id").withColumnRenamed(

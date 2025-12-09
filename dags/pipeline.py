@@ -125,7 +125,7 @@ with DAG("01_etl", default_args=default_args, schedule_interval="@once") as dag:
 
     # Task 6: Feast Materialize (Load Redis)
     # Loads data from 2020 up to NOW
-    feast_materialize = DockerOperator(
+    feast_materialize_task = DockerOperator(
         task_id="feast_materialize",
         image="dag-spark:v1",
         api_version="auto",
@@ -146,5 +146,5 @@ with DAG("01_etl", default_args=default_args, schedule_interval="@once") as dag:
         >> feature_eng_task
         >> data_validation_task
         >> feast_apply
-        >> feast_materialize
+        >> feast_materialize_task
     )
